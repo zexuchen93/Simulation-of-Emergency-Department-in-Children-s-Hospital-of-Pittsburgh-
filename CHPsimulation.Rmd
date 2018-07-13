@@ -1,0 +1,574 @@
+---
+title: "Untitled"
+author: "zexu chen"
+date: "2018/03/01"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(simmer)
+library(dplyr)
+library(magrittr)
+```
+
+arrival Rate= 9.451 patients/hour
+
+Average Triage Time= 15.353 mins
+StDev=17.625
+
+Average RLOS= 172.684 mins
+StDev= 149.819
+
+Upstairs Time (Eval complete to time left ED): 87.836 mins
+StDev = 160.521 
+
+Percentage of arrivals:
+Discharged: 77.69%
+Admits: 18.18%
+LAMA: 0.04%
+LWBS: 1.90%
+Not specified: 2.18%
+
+
+patient = #arrival distribution?
+room = 42
+indocator = #labs, radiology, pharmmacy, consults, discharged/admitted
+
+```{r}
+
+numNurse = 2
+numRoom = 42
+numReplications = 30
+
+```
+
+#first version
+
+patient <- trajectory("patient's path ") %>%
+  seize("triage nurse", amount=1) %>% 
+  timeout(function() rexp(n = 1, rate = 0.085))%>% 
+  release("triage nurse", amount = 1)%>%
+  seize("room", amount = 1)%>%
+  timeout(function() rgamma(n = 1, shape = 2.618 ,rate = 0.016 ))%>%
+  release("room",1)
+
+ 
+
+
+#2 types of patients: admitted and discharged
+#each get one trajectory
+```{r}
+patient1 <- trajectory("admitted ") %>%
+  seize("triage nurse", amount=1) %>% 
+  timeout(function() rexp(n = 1, rate = 0.085))%>% 
+  release("triage nurse", amount = 1)%>%
+  seize("room", amount = 1)%>%
+  timeout(function() rgamma(n = 1, shape = 5.68 ,rate = 0.021))%>%
+  release("room",1)
+
+
+patient2 <- trajectory("discharged ") %>%
+  seize("triage nurse", amount=1) %>% 
+  timeout(function() rexp(n = 1, rate = 0.085))%>% 
+  release("triage nurse", amount = 1)%>%
+  seize("room", amount = 1)%>%
+  timeout(function() rgamma(n = 1, shape = 2.82 ,rate = 0.02 ))%>%
+  release("room",1)
+```
+
+
+
+#with branch
+50-50 chance
+patient <- trajectory("patient's path ") %>%
+        branch(option = function() sample(1:2, 1), continue = c(T, F), 
+        trajectory("discharged")%>%
+          seize("triage nurse", amount=1) %>% 
+          timeout(function() rexp(n = 1, rate = 0.085))%>% 
+          release("triage nurse", amount = 1)%>%
+          seize("room", amount = 1)%>%
+          timeout(function() rgamma(n = 1, shape = 2.82 ,rate = 0.02 ))%>%
+          release("room",amount = 1),
+        trajectory("admitted")%>%
+          seize("triage nurse", amount=1) %>% 
+          timeout(function() rexp(n = 1, rate = 0.085))%>% 
+          release("triage nurse", amount = 1)%>%
+          seize("room", amount = 1)%>%
+          timeout(function() rgamma(n = 1, shape = 5.68 ,rate = 0.021))%>%
+          release("room",1)
+          )
+
+
+patient <- trajectory("patient's path ") %>%
+  seize("triage nurse", amount=1) %>% 
+  timeout(function() rexp(n = 1, rate = 0.085))%>% 
+  release("triage nurse", amount = 1)%>%
+  seize("room", amount = 1)%>%
+  timeout(function() rgamma(n = 1, shape = 2.618 ,rate = 0.016 ))%>%
+  release("room",1)
+
+
+
+#with ESIs 
+data needed :
+shape and rate for the case admitted and discharged
+arrival rates classified by ESIs and by time period
+ 
+
+
+```{r}
+hospital<-
+  simmer("hospital") %>%
+  add_resource("triage nurse",numNurse) %>%
+  add_resource("room", numRoom)%>%
+  #schedule(c(6, 12, 18, 24), c(3, 5, 2, 1), period=24)
+  
+  
+  
+  add_generator("patientESI1-a", patient1, from_to(0, 6*60, function() rexp(1, rate = 0.02)))%>%
+  add_generator("patientESI1-b", patient1, from_to(6*60, 12*60, function() rexp(1, rate = 0.026)) )%>%
+  add_generator("patientESI1-c", patient1, from_to(12*60, 18*60, function() rexp(1, rate = 0.029)) )%>%
+  add_generator("patientESI1-d", patient1, from_to(18*60, 24*60, function() rexp(1, rate = 0.012)) )%>%
+  add_generator("patientESI2-a", patient1, from_to(0, 6*60, function() rexp(1, rate = 0.02)))%>%
+  add_generator("patientESI2-b", patient1, from_to(6*60, 12*60, function() rexp(1, rate = 0.026)) )%>%
+  add_generator("patientESI2-c", patient1, from_to(12*60, 18*60, function() rexp(1, rate = 0.029)) )%>%
+  add_generator("patientESI2-d", patient1, from_to(18*60, 24*60, function() rexp(1, rate = 0.012)) )%>%
+  add_generator("patientESI3-a", patient1, from_to(0, 6*60, function() rexp(1, rate = 0.02)))%>%
+  add_generator("patientESI3-b", patient1, from_to(6*60, 12*60, function() rexp(1, rate = 0.026)) )%>%
+  add_generator("patientESI3-c", patient1, from_to(12*60, 18*60, function() rexp(1, rate = 0.029)) )%>%
+  add_generator("patientESI3-d", patient1, from_to(18*60, 24*60, function() rexp(1, rate = 0.012)) )%>%
+  add_generator("patientESI4-a", patient1, from_to(0, 6*60, function() rexp(1, rate = 0.02)))%>%
+  add_generator("patientESI4-b", patient1, from_to(6*60, 12*60, function() rexp(1, rate = 0.026)) )%>%
+  add_generator("patientESI4-c", patient1, from_to(12*60, 18*60, function() rexp(1, rate = 0.029)) )%>%
+  add_generator("patientESI4-d", patient1, from_to(18*60, 24*60, function() rexp(1, rate = 0.012)) )%>%
+  add_generator("patientESI5-a", patient1, from_to(0, 6*60, function() rexp(1, rate = 0.02)))%>%
+  add_generator("patientESI5-b", patient1, from_to(6*60, 12*60, function() rexp(1, rate = 0.026)) )%>%
+  add_generator("patientESI5-c", patient1, from_to(12*60, 18*60, function() rexp(1, rate = 0.029)) )%>%
+  add_generator("patientESI5-d", patient1, from_to(18*60, 24*60, function() rexp(1, rate = 0.012)) )%>%
+  add_generator("patientESI0-a", patient1, from_to(0, 6*60, function() rexp(1, rate = 0.02)))%>%
+  add_generator("patientESI0-b", patient1, from_to(6*60, 12*60, function() rexp(1, rate = 0.026)) )%>%
+  add_generator("patientESI0-c", patient1, from_to(12*60, 18*60, function() rexp(1, rate = 0.029)) )%>%
+  add_generator("patientESI0-d", patient1, from_to(18*60, 24*60, function() rexp(1, rate = 0.012)) )%>%
+  add_generator("patientESI1-e", patient2, from_to(0, 6*60, function() rexp(1, rate = 0.02)))%>%
+  add_generator("patientESI1-f", patient2, from_to(6*60, 12*60, function() rexp(1, rate = 0.026)) )%>%
+  add_generator("patientESI1-g", patient2, from_to(12*60, 18*60, function() rexp(1, rate = 0.029)) )%>%
+  add_generator("patientESI1-h", patient2, from_to(18*60, 24*60, function() rexp(1, rate = 0.012)) )%>%
+  add_generator("patientESI2-e", patient2, from_to(0, 6*60, function() rexp(1, rate = 0.02)))%>%
+  add_generator("patientESI2-f", patient2, from_to(6*60, 12*60, function() rexp(1, rate = 0.026)) )%>%
+  add_generator("patientESI2-g", patient2, from_to(12*60, 18*60, function() rexp(1, rate = 0.029)) )%>%
+  add_generator("patientESI2-h", patient2, from_to(18*60, 24*60, function() rexp(1, rate = 0.012)) )%>%
+  add_generator("patientESI3-e", patient2, from_to(0, 6*60, function() rexp(1, rate = 0.02)))%>%
+  add_generator("patientESI3-f", patient2, from_to(6*60, 12*60, function() rexp(1, rate = 0.026)) )%>%
+  add_generator("patientESI3-g", patient2, from_to(12*60, 18*60, function() rexp(1, rate = 0.029)) )%>%
+  add_generator("patientESI3-h", patient2, from_to(18*60, 24*60, function() rexp(1, rate = 0.012)) )%>%
+  add_generator("patientESI4-e", patient2, from_to(0, 6*60, function() rexp(1, rate = 0.02)))%>%
+  add_generator("patientESI4-f", patient2, from_to(6*60, 12*60, function() rexp(1, rate = 0.026)) )%>%
+  add_generator("patientESI4-g", patient2, from_to(12*60, 18*60, function() rexp(1, rate = 0.029)) )%>%
+  add_generator("patientESI4-h", patient2, from_to(18*60, 24*60, function() rexp(1, rate = 0.012)) )%>%
+  add_generator("patientESI5-e", patient2, from_to(0, 6*60, function() rexp(1, rate = 0.02)))%>%
+  add_generator("patientESI5-f", patient2, from_to(6*60, 12*60, function() rexp(1, rate = 0.026)) )%>%
+  add_generator("patientESI5-g", patient2, from_to(12*60, 18*60, function() rexp(1, rate = 0.029)) )%>%
+  add_generator("patientESI5-h", patient2, from_to(18*60, 24*60, function() rexp(1, rate = 0.012)) )%>%
+  add_generator("patientESI0-e", patient2, from_to(0, 6*60, function() rexp(1, rate = 0.02)))%>%
+  add_generator("patientESI0-f", patient2, from_to(6*60, 12*60, function() rexp(1, rate = 0.026)) )%>%
+  add_generator("patientESI0-g", patient2, from_to(12*60, 18*60, function() rexp(1, rate = 0.029)) )%>%
+  add_generator("patientESI0-h", patient2, from_to(18*60, 24*60, function() rexp(1, rate = 0.012)) )%>%
+
+#generate the arrivals according to time and ESIs
+#can using from_to to change the parameters
+
+ run(until = 1440)
+
+```
+
+
+# initial version, 4 time periods
+hospital<-
+  simmer("hospital") %>%
+  add_resource("triage nurse",numNurse) %>%
+  add_resource("room", numRoom)%>%
+  #schedule(c(6, 12, 18, 24), c(3, 5, 2, 1), period=24)
+  
+  
+  
+  add_generator("patienta", patient, from_to(0, 6*60, function() rexp(1, rate = 0.02)))%>%
+  add_generator("patientb", patient, from_to(6*60, 12*60, function() rexp(1, rate = 0.026)) )%>%
+  add_generator("patientc", patient, from_to(12*60, 18*60, function() rexp(1, rate = 0.029)) )%>%
+  add_generator("patientd", patient, from_to(18*60, 24*60, function() rexp(1, rate = 0.012)) )%>%
+  
+  run(until = 1440)
+
+
+
+
+There are three types of plot implemented with different metrics available:
+
+a.
+Plot of resources. Two metrics available:
+the usage of a resource over the simulation time frame.
+the utilization of specified resources in the simulation.
+b.
+Plot of arrivals. Three metrics available:
+activity time.
+waiting time.
+flow time.
+c.
+Plot of attributes.
+
+
+```{r}
+
+#install.packages("simmer.plot")
+```
+
+
+
+#resource(triage nurse, room) utilization
+
+The top of the bar shows the median utilization.
+
+```{r}
+library(simmer.plot)
+
+resources <- get_mon_resources(hospital)
+plot(resources, metric = "utilization")
+
+```
+
+
+#time uitilization(nurse & room, intervals, not timestamp)
+
+
+```{r}
+arrivals <- get_mon_arrivals(hospital, per_resource = T)
+table(arrivals$resource)
+# Let's see the distributions
+ggplot(arrivals) + geom_histogram(aes(x=activity_time)) + facet_wrap(~resource)
+ 
+``` 
+
+
+
+```{r}
+hospital %>%
+  get_mon_arrivals%>%
+  dplyr::mutate(service_start_time = end_time - activity_time) %>%
+  mutate(wait_time = service_start_time - start_time)%>%
+  dplyr::arrange(start_time)
+  
+```
+
+```{r}
+hospital%>%
+  get_mon_resources %>%
+  dplyr::arrange(time)
+
+```
+
+
+
+
+```{r}
+hospital%>%
+  get_mon_arrivals%>%
+  mutate(waiting_time = end_time - start_time - activity_time)
+```
+
+
+#resource usage
+
+#distribution of queue(nurse & room)
+
+
+```{r}
+
+plot(get_mon_resources(hospital), "usage", c("triage nurse", "room"), steps = TRUE)
+
+```
+
+
+
+
+
+#resources??? activity during the simulation.
+
+```{r}
+plot(resources, metric = "usage", c("triage nurse", "room"), items = "server")
+
+```
+
+#patient waiting time distribution
+
+```{r}
+arrivals <- get_mon_arrivals(hospital, per_resource = T)
+summary(arrivals)
+# Let's see the distributions
+waiting_time <- arrivals$end_time - arrivals$start_time - arrivals$activity_time
+
+```
+
+
+#waiting_time 
+
+```{r}
+summary(waiting_time)
+
+```
+
+#distribution of waiting_time
+
+```{r}
+hist(waiting_time, freq = FALSE)
+lines(density(waiting_time))
+```
+
+
+try to fit distribution of waiting_time
+
+
+```{r}
+library(fitdistrplus)
+descdist(waiting_time, discrete = FALSE)
+
+```
+
+attempt to fit different distributions.
+For example: normal distribution
+
+
+normal_dist <- fitdist(waiting_time, "norm")
+plot(normal_dist)
+
+
+
+
+
+Next we can have a look at the evolution of the arrivals??? flow time during the simulation.
+In the plot below, each individual line represents a replication. 
+A smooth line is drawn over them.
+All arrivals that didn’t finish their entire trajectory are excluded from the plot.
+
+only one replication:
+
+```{r}
+arrivals <- get_mon_arrivals(hospital)
+plot(arrivals, metric = "flow_time")
+
+```
+
+Similarly one can have a look at the evolution of the activity times 
+with metric = "activity_time" and waiting times with metric = "waiting_time".
+
+```{r}
+arrivals <- get_mon_arrivals(hospital)
+plot(arrivals, metric = "waiting_time")
+
+```
+
+#replications
+waiting_time for each replication
+calculate the mean 
+
+# with stationary distribution arrivals
+hospitalsims<-lapply(1:numReplications, function(i){
+  simmer("hospital") %>%
+  add_resource("triage nurse",numNurse) %>%
+  add_resource("room", numRoom)%>%
+  add_generator("patient", patient, function() {rexp(1, 1/7.28)})%>% 
+    run(until = 1440)
+})
+
+
+
+#with Non stationary distribution arrivals
+```{r}
+hospitalsims<-lapply(1:numReplications, function(i){
+  simmer("hospital") %>%
+  add_resource("triage nurse",numNurse) %>%
+  add_resource("room", numRoom)%>%
+  #schedule(c(6, 12, 18, 24), c(3, 5, 2, 1), period=24)
+  
+    
+  add_generator("patientESI1-a", patient1, from_to(0, 6*60, function() rexp(1, rate = 0.02)))%>%
+  add_generator("patientESI1-b", patient1, from_to(6*60, 12*60, function() rexp(1, rate = 0.026)) )%>%
+  add_generator("patientESI1-c", patient1, from_to(12*60, 18*60, function() rexp(1, rate = 0.029)) )%>%
+  add_generator("patientESI1-d", patient1, from_to(18*60, 24*60, function() rexp(1, rate = 0.012)) )%>%
+  add_generator("patientESI2-a", patient1, from_to(0, 6*60, function() rexp(1, rate = 0.02)))%>%
+  add_generator("patientESI2-b", patient1, from_to(6*60, 12*60, function() rexp(1, rate = 0.026)) )%>%
+  add_generator("patientESI2-c", patient1, from_to(12*60, 18*60, function() rexp(1, rate = 0.029)) )%>%
+  add_generator("patientESI2-d", patient1, from_to(18*60, 24*60, function() rexp(1, rate = 0.012)) )%>%
+  add_generator("patientESI3-a", patient1, from_to(0, 6*60, function() rexp(1, rate = 0.02)))%>%
+  add_generator("patientESI3-b", patient1, from_to(6*60, 12*60, function() rexp(1, rate = 0.026)) )%>%
+  add_generator("patientESI3-c", patient1, from_to(12*60, 18*60, function() rexp(1, rate = 0.029)) )%>%
+  add_generator("patientESI3-d", patient1, from_to(18*60, 24*60, function() rexp(1, rate = 0.012)) )%>%
+  add_generator("patientESI4-a", patient1, from_to(0, 6*60, function() rexp(1, rate = 0.02)))%>%
+  add_generator("patientESI4-b", patient1, from_to(6*60, 12*60, function() rexp(1, rate = 0.026)) )%>%
+  add_generator("patientESI4-c", patient1, from_to(12*60, 18*60, function() rexp(1, rate = 0.029)) )%>%
+  add_generator("patientESI4-d", patient1, from_to(18*60, 24*60, function() rexp(1, rate = 0.012)) )%>%
+  add_generator("patientESI5-a", patient1, from_to(0, 6*60, function() rexp(1, rate = 0.02)))%>%
+  add_generator("patientESI5-b", patient1, from_to(6*60, 12*60, function() rexp(1, rate = 0.026)) )%>%
+  add_generator("patientESI5-c", patient1, from_to(12*60, 18*60, function() rexp(1, rate = 0.029)) )%>%
+  add_generator("patientESI5-d", patient1, from_to(18*60, 24*60, function() rexp(1, rate = 0.012)) )%>%
+  add_generator("patientESI0-a", patient1, from_to(0, 6*60, function() rexp(1, rate = 0.02)))%>%
+  add_generator("patientESI0-b", patient1, from_to(6*60, 12*60, function() rexp(1, rate = 0.026)) )%>%
+  add_generator("patientESI0-c", patient1, from_to(12*60, 18*60, function() rexp(1, rate = 0.029)) )%>%
+  add_generator("patientESI0-d", patient1, from_to(18*60, 24*60, function() rexp(1, rate = 0.012)) )%>%
+  add_generator("patientESI1-e", patient2, from_to(0, 6*60, function() rexp(1, rate = 0.02)))%>%
+  add_generator("patientESI1-f", patient2, from_to(6*60, 12*60, function() rexp(1, rate = 0.026)) )%>%
+  add_generator("patientESI1-g", patient2, from_to(12*60, 18*60, function() rexp(1, rate = 0.029)) )%>%
+  add_generator("patientESI1-h", patient2, from_to(18*60, 24*60, function() rexp(1, rate = 0.012)) )%>%
+  add_generator("patientESI2-e", patient2, from_to(0, 6*60, function() rexp(1, rate = 0.02)))%>%
+  add_generator("patientESI2-f", patient2, from_to(6*60, 12*60, function() rexp(1, rate = 0.026)) )%>%
+  add_generator("patientESI2-g", patient2, from_to(12*60, 18*60, function() rexp(1, rate = 0.029)) )%>%
+  add_generator("patientESI2-h", patient2, from_to(18*60, 24*60, function() rexp(1, rate = 0.012)) )%>%
+  add_generator("patientESI3-e", patient2, from_to(0, 6*60, function() rexp(1, rate = 0.02)))%>%
+  add_generator("patientESI3-f", patient2, from_to(6*60, 12*60, function() rexp(1, rate = 0.026)) )%>%
+  add_generator("patientESI3-g", patient2, from_to(12*60, 18*60, function() rexp(1, rate = 0.029)) )%>%
+  add_generator("patientESI3-h", patient2, from_to(18*60, 24*60, function() rexp(1, rate = 0.012)) )%>%
+  add_generator("patientESI4-e", patient2, from_to(0, 6*60, function() rexp(1, rate = 0.02)))%>%
+  add_generator("patientESI4-f", patient2, from_to(6*60, 12*60, function() rexp(1, rate = 0.026)) )%>%
+  add_generator("patientESI4-g", patient2, from_to(12*60, 18*60, function() rexp(1, rate = 0.029)) )%>%
+  add_generator("patientESI4-h", patient2, from_to(18*60, 24*60, function() rexp(1, rate = 0.012)) )%>%
+  add_generator("patientESI5-e", patient2, from_to(0, 6*60, function() rexp(1, rate = 0.02)))%>%
+  add_generator("patientESI5-f", patient2, from_to(6*60, 12*60, function() rexp(1, rate = 0.026)) )%>%
+  add_generator("patientESI5-g", patient2, from_to(12*60, 18*60, function() rexp(1, rate = 0.029)) )%>%
+  add_generator("patientESI5-h", patient2, from_to(18*60, 24*60, function() rexp(1, rate = 0.012)) )%>%
+  add_generator("patientESI0-e", patient2, from_to(0, 6*60, function() rexp(1, rate = 0.02)))%>%
+  add_generator("patientESI0-f", patient2, from_to(6*60, 12*60, function() rexp(1, rate = 0.026)) )%>%
+  add_generator("patientESI0-g", patient2, from_to(12*60, 18*60, function() rexp(1, rate = 0.029)) )%>%
+  add_generator("patientESI0-h", patient2, from_to(18*60, 24*60, function() rexp(1, rate = 0.012)) )%>%
+   
+    
+    
+    
+#generate the arrivals according to time
+#can using from_to to change the parameters
+
+ run(until = 1440)
+})
+```
+
+
+```{r}
+plot(get_mon_resources(hospitalsims))
+
+```
+
+#resources monitor
+```{r}
+resourcesmonitor <- lapply(1:numReplications, function(i){
+  result<-hospitalsims[[i]]%>%
+    get_mon_resources()
+})
+
+
+```
+
+
+# arrival monitor
+```{r}
+arrivalmonitor<-lapply (1:numReplications, function(i){
+  result<-hospitalsims[[i]]%>%
+    get_mon_arrivals()%>%
+    dplyr::mutate(service_start_time = end_time - activity_time) %>%
+    mutate(wait_time = service_start_time - start_time)
+})
+
+```
+
+
+#patient monitor
+```{r}
+patientmonitor <- lapply(1:numReplications, function(i){
+        result <- hospitalsims[[i]] %>% 
+          get_mon_arrivals %>%
+          mutate(flow_time = end_time - start_time)
+})
+
+
+```
+
+
+```{r}
+get_mean_flow <- function(entitymonitor){
+  mean(entitymonitor$flow_time)
+}
+```
+
+
+```{r}
+avg_patient_flow <- sapply(patientmonitor, get_mean_flow)
+avg_patient_flowtime <- data.frame(run = 1:numReplications,
+                                 avg_flow_time = avg_patient_flow)
+avg_patient_flowtime
+```
+
+
+#get mean for waiting_time
+
+```{r}
+
+res <- get_mon_arrivals(hospitalsims, per_resource = TRUE) %>%
+  dplyr::select(name, resource) %>%
+  dplyr::filter(resource %in% c("triage nurse", "room"))
+
+
+arr <- get_mon_arrivals(hospitalsims) %>%
+  dplyr::mutate(waiting_time = end_time - (start_time + activity_time), 
+                generator = regmatches(name,regexpr("patient[[:alpha:]]", name))
+                ) %>%
+  dplyr::left_join(res) %>%
+  dplyr::group_by(generator, resource) %>%
+  summarise(avgwait = mean(waiting_time, na.rm=TRUE))
+```
+
+```{r}
+arr2 <- get_mon_arrivals(hospitalsims, per_resource = TRUE) %>%
+  dplyr::mutate(waiting_time = end_time - (start_time + activity_time), 
+                generator = regmatches(name, regexpr("patient[[:alpha:]]", name))) %>%
+  dplyr::left_join(res)
+```
+
+
+
+```{r}
+waitstatistics <- arr2 %>% group_by(resource) %>%
+  dplyr::summarise(meanwait = mean(waiting_time, na.rm=TRUE),
+                   sdwait = sd(waiting_time, na.rm=TRUE))
+waitstatistics
+```
+
+
+
+
+#server utilization
+```{r}
+serverutilization <- function(resource){
+  resource <- resource %>% arrange(time)
+  lenreg <- nrow(resource)
+  timein  <- c()
+  for(i in 1:(lenreg-1)){
+    timeinstate = resource$time[i+1] - resource$time[i]
+    timein <- append(timein, timeinstate)
+  }
+  timein <- append(timein, 0)
+  resource$timein <- timein
+  serverutilization <- sum(resource$server * resource$timein) /(max(resource$time) - min(resource$time))
+  serverutilization
+}
+```
+
+
+#triage nurse monitor
+```{r}
+triagenursemonitor<-resourcesmonitor[[1]]%>%
+  filter(resource == "triage nurse")%>%
+  arrange(time)
+triagenurseutilization<-serverutilization(triagenursemonitor)
+
+triagenurseutilization
+```
+
+
+
