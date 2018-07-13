@@ -1,0 +1,1209 @@
+---
+title: "ED Simulation with color rooms"
+author: "Zexu Chen"
+date: "April 23, 2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(simmer)
+library(dplyr)
+library(magrittr)
+library(sqldf)
+library(ggplot2)
+```
+
+# 1. divide ED into color zones (done)
+green ,yellow, orange,red - 4 colors
+
+Red Rooms: 10 
+Orange Rooms: 12 
+Yellow Rooms: 12 
+Green Rooms: 8 
+Fast Track Rooms: 3 
+
+Total Rooms: 45 
+
+2 queues: 
+One for ESI 1 - ESI 3 (1's have highest priority). These patients can go in red, orange, and yellow. For ESI 1 and 2 put them in red then orange then yellow. For ESI 3, put them in orange or yellow and red last. 
+
+One for ESI 4 and ESI 5. All 5's go to fast track. Some percentage of 4's go to fast track. Remaining 4's go to green. 
+
+
+
+
+
+# 2.  Reporting
+
+    i. Patient wait time distribution by ESI
+    ii. Multiple replications
+    iii. Resource utilization/use graphs      
+
+
+
+```{r}
+numNurse = 2 #triage nurses
+numRedRoom <- 10     
+numOrangeRoom<- 12 
+numYellowRoom <- 12
+numOrangeYellowRoom <- numOrangeRoom + numYellowRoom
+numGreenRoom <- 8
+numFastTrackRoom <- 3
+numRoom =  numFastTrackRoom + numGreenRoom #+ numOrangeRoom + numYellowRoom # + numRedRoom
+queue1 <- c("ESI1", "ESI2", "ESI3")
+queue2 <- c("ESI4", "ESI5")
+
+percentage_of_ESI4 <- 0.25
+numReplications <- 30
+set.seed(42)
+```
+
+
+
+```{r}
+ESI_1_patient1 <- trajectory("ESI_1_admitted ") %>%
+  seize("triage nurse", amount=1) %>% 
+  timeout(function() rexp(n = 1, rate = 0.085))%>% 
+  release("triage nurse", amount = 1)%>%
+  branch(function(){ 
+     ifelse(get_capacity(hospitalESI, "redRoom") < get_server_count(hospitalESI, "redRoom"), 
+             1,  2)}, continue = c(TRUE,TRUE),
+     trajectory("RedRoom is available")%>%
+        seize("redRoom", amount = 1)%>%
+        timeout(function() rgamma(n = 1, shape = 2.823 ,rate = 0.026 ))%>%
+        release("redRoom",1),
+     trajectory("RedRoom is not available")%>%
+        branch(function(){ 
+          ifelse(get_capacity(hospitalESI, "orangeRoom") < get_server_count(hospitalESI, "orangeRoom"), 
+             1,  2)}, continue = c(TRUE,TRUE),
+          trajectory("OrangeRoom is available")%>%
+             seize("orangeRoom", amount = 1)%>%
+             timeout(function() rgamma(n = 1, shape = 2.823 ,rate = 0.026 ))%>%
+             release("orangeRoom",1),
+          trajectory("OrangeRoom is not available")%>%
+             seize("yellowRoom", amount = 1)%>%
+             timeout(function() rgamma(n = 1, shape = 2.823 ,rate = 0.026 ))%>%
+             release("yellowRoom",1) 
+    ) )
+
+ESI_1_patient2 <- trajectory("ESI_1_discharged ") %>%
+  seize("triage nurse", amount=1) %>% 
+  timeout(function() rexp(n = 1, rate = 0.085))%>% 
+  release("triage nurse", amount = 1)%>%
+  branch(function(){ 
+     ifelse(get_capacity(hospitalESI, "redRoom") < get_server_count(hospitalESI, "redRoom"), 
+             1,  2)}, continue = c(TRUE,TRUE),
+     trajectory("RedRoom is available")%>%
+        seize("redRoom", amount = 1)%>%
+        timeout(function() rgamma(n = 1, shape = 2.823 ,rate = 0.026 ))%>%
+        release("redRoom",1),
+     trajectory("RedRoom is not available")%>%
+        branch(function(){ 
+          ifelse(get_capacity(hospitalESI, "orangeRoom") < get_server_count(hospitalESI, "orangeRoom"), 
+             1,  2)}, continue = c(TRUE,TRUE),
+          trajectory("OrangeRoom is available")%>%
+             seize("orangeRoom", amount = 1)%>%
+             timeout(function() rgamma(n = 1, shape = 2.823 ,rate = 0.026 ))%>%
+             release("orangeRoom",1),
+          trajectory("OrangeRoom is not available")%>%
+             seize("yellowRoom", amount = 1)%>%
+             timeout(function() rgamma(n = 1, shape = 2.823 ,rate = 0.026 ))%>%
+             release("yellowRoom",1) 
+    ) )
+```
+
+
+```{r}
+ESI_2_patient1 <- trajectory("ESI_2_admitted ") %>%
+  seize("triage nurse", amount=1) %>% 
+  timeout(function() rexp(n = 1, rate = 0.085))%>% 
+  release("triage nurse", amount = 1)%>%
+  branch(function(){ 
+     ifelse(get_capacity(hospitalESI, "redRoom") < get_server_count(hospitalESI, "redRoom"), 
+             1,  2)}, continue = c(TRUE,TRUE),
+     trajectory("RedRoom is available")%>%
+        seize("redRoom", amount = 1)%>%
+        timeout(function() rgamma(n = 1, shape = 2.823 ,rate = 0.026 ))%>%
+        release("redRoom",1),
+     trajectory("RedRoom is not available")%>%
+        branch(function(){ 
+          ifelse(get_capacity(hospitalESI, "orangeRoom") < get_server_count(hospitalESI, "orangeRoom"), 
+             1,  2)}, continue = c(TRUE,TRUE),
+          trajectory("OrangeRoom is available")%>%
+             seize("orangeRoom", amount = 1)%>%
+             timeout(function() rgamma(n = 1, shape = 2.823 ,rate = 0.026 ))%>%
+             release("orangeRoom",1),
+          trajectory("OrangeRoom is not available")%>%
+             seize("yellowRoom", amount = 1)%>%
+             timeout(function() rgamma(n = 1, shape = 2.823 ,rate = 0.026 ))%>%
+             release("yellowRoom",1) 
+    ) )
+
+ESI_2_patient2 <- trajectory("ESI_2_discharged ") %>%
+  seize("triage nurse", amount=1) %>% 
+  timeout(function() rexp(n = 1, rate = 0.085))%>% 
+  release("triage nurse", amount = 1)%>%
+  branch(function(){ 
+     ifelse(get_capacity(hospitalESI, "redRoom") < get_server_count(hospitalESI, "redRoom"), 
+             1,  2)}, continue = c(TRUE,TRUE),
+     trajectory("RedRoom is available")%>%
+        seize("redRoom", amount = 1)%>%
+        timeout(function() rgamma(n = 1, shape = 2.823 ,rate = 0.026 ))%>%
+        release("redRoom",1),
+     trajectory("RedRoom is not available")%>%
+        branch(function(){ 
+          ifelse(get_capacity(hospitalESI, "orangeRoom") < get_server_count(hospitalESI, "orangeRoom"), 
+             1,  2)}, continue = c(TRUE,TRUE),
+          trajectory("OrangeRoom is available")%>%
+             seize("orangeRoom", amount = 1)%>%
+             timeout(function() rgamma(n = 1, shape = 2.823 ,rate = 0.026 ))%>%
+             release("orangeRoom",1),
+          trajectory("OrangeRoom is not available")%>%
+             seize("yellowRoom", amount = 1)%>%
+             timeout(function() rgamma(n = 1, shape = 2.823 ,rate = 0.026 ))%>%
+             release("yellowRoom",1) 
+    ) )
+
+
+```
+
+```{r}
+ESI_3_patient1 <- trajectory("ESI_3_admitted ") %>%
+  seize("triage nurse", amount=1) %>% 
+  timeout(function() rexp(n = 1, rate = 0.085))%>% 
+  release("triage nurse", amount = 1)%>%
+  branch(function(){ 
+      ifelse(get_capacity(hospitalESI, "orangeyellowRoom") < get_server_count(hospitalESI, "orangeyellowRoom"), 
+             1,  2)}, continue = c(TRUE,TRUE),
+     trajectory("orangeyelloeRoom is available")%>%
+        seize("orangeyellowRoom", amount = 1)%>%
+        timeout(function() rgamma(n = 1, shape = 2.823 ,rate = 0.026 ))%>%
+        release("orangeyellowRoom",1),
+     trajectory("orangeyellowRoom is not available")%>%
+        seize("redRoom", amount = 1)%>%
+        timeout(function() rgamma(n = 1, shape = 2.823 ,rate = 0.026 ))%>%
+        release("redRoom",1) 
+    ) 
+
+ESI_3_patient2 <- trajectory("ESI_3_discharged ") %>%
+  seize("triage nurse", amount=1) %>% 
+  timeout(function() rexp(n = 1, rate = 0.085))%>% 
+  release("triage nurse", amount = 1)%>%
+  branch(function(){ 
+      ifelse(get_capacity(hospitalESI, "orangeyellowRoom") < get_server_count(hospitalESI, "orangeyellowRoom"), 
+             1,  2)}, continue = c(TRUE,TRUE),
+     trajectory("orangeyellowRoom is available")%>%
+        seize("orangeyellowRoom", amount = 1)%>%
+        timeout(function() rgamma(n = 1, shape = 2.823 ,rate = 0.026 ))%>%
+        release("orangeyellowRoom",1),
+     trajectory("orangeyellowRoom is not available")%>%
+        seize("redRoom", amount = 1)%>%
+        timeout(function() rgamma(n = 1, shape = 2.823 ,rate = 0.026 ))%>%
+        release("redRoom",1) 
+    ) 
+
+```
+
+
+
+```{r}
+
+ESI_4_patient1 <- trajectory("ESI_4_admitted ") %>%
+  seize("triage nurse", amount=1) %>% 
+  timeout(function() rexp(n = 1, rate = 0.085))%>% 
+  release("triage nurse", amount = 1)%>%
+  branch(
+    function() (runif(1) > percentage_of_ESI4) + 1, continue=c(F, F),
+    trajectory() %>% 
+      seize("greenRoom", amount = 1)%>%
+      timeout(function() rgamma(n = 1, shape = 5.68 ,rate = 0.021))%>%
+      release("greenRoom",1),
+    trajectory() %>% 
+      seize("fasttrackRoom", amount = 1)%>%
+      timeout(function() rgamma(n = 1, shape = 5.68 ,rate = 0.021))%>%
+      release("fasttrackRoom",1)
+  )
+
+ 
+
+ESI_4_patient2 <- trajectory("ESI_4_discharged ") %>%
+  seize("triage nurse", amount=1) %>% 
+  timeout(function() rexp(n = 1, rate = 0.085))%>% 
+  release("triage nurse", amount = 1)%>%
+  branch(
+    function() (runif(1) > percentage_of_ESI4) + 1, continue=c(F, F),
+    trajectory() %>% 
+      seize("greenRoom", amount = 1)%>%
+      timeout(function() rgamma(n = 1, shape = 5.68 ,rate = 0.021))%>%
+      release("greenRoom",1),
+    trajectory() %>% 
+      seize("fasttrackRoom", amount = 1)%>%
+      timeout(function() rgamma(n = 1, shape = 5.68 ,rate = 0.021))%>%
+      release("fasttrackRoom",1)
+  )
+
+```
+
+
+```{r}
+
+ESI_5_patient1 <- trajectory("ESI_5_admitted ") %>%
+  seize("triage nurse", amount=1) %>% 
+  timeout(function() rexp(n = 1, rate = 0.085))%>% 
+  release("triage nurse", amount = 1)%>%
+  seize("fasttrackRoom", amount = 1)%>%
+  timeout(function() rgamma(n = 1, shape = 5.68 ,rate = 0.021))%>%
+  release("fasttrackRoom",1)
+
+
+ESI_5_patient2 <- trajectory("ESI_5_discharged ") %>%
+  seize("triage nurse", amount=1) %>% 
+  timeout(function() rexp(n = 1, rate = 0.085))%>% 
+  release("triage nurse", amount = 1)%>%
+  seize("fasttrackRoom", amount = 1)%>%
+  timeout(function() rgamma(n = 1, shape = 2.82 ,rate = 0.02 ))%>%
+  release("fasttrackRoom",1)
+
+```
+
+
+```{r}
+hospitalESI<-
+  simmer("hospitalESI") %>%
+  add_resource("triage nurse",numNurse) %>%
+  add_resource("redRoom", numRedRoom) %>%
+  add_resource("orangeyellowRoom", numOrangeYellowRoom) %>%
+  add_resource("orangeRoom", numOrangeRoom) %>%
+  add_resource("yellowRoom", numYellowRoom) %>%
+  add_resource("greenRoom", numGreenRoom) %>%
+  add_resource("fasttrackRoom", numFastTrackRoom) %>%
+  #add_resource("room", numRoom)%>%
+
+  
+  add_generator("patientESI1-a", ESI_1_patient1, from_to(0, 6*60, function() rexp(1, rate = 0.0039/60)))%>%
+  add_generator("patientESI1-b", ESI_1_patient1, from_to(6*60, 12*60, function() rexp(1, rate = 0.0123/60)) )%>%
+  add_generator("patientESI1-c", ESI_1_patient1, from_to(12*60, 18*60, function() rexp(1, rate = 0.0132/60)) )%>%
+  add_generator("patientESI1-d", ESI_1_patient1, from_to(18*60, 24*60, function() rexp(1, rate = 0.0113/60)) )%>%
+  add_generator("patientESI2-a", ESI_2_patient1, from_to(0, 6*60, function() rexp(1, rate = 0.25/60)))%>%
+  add_generator("patientESI2-b", ESI_2_patient1, from_to(6*60, 12*60, function() rexp(1, rate = 0.46/60)) )%>%
+  add_generator("patientESI2-c", ESI_2_patient1, from_to(12*60, 18*60, function() rexp(1, rate = 0.92/60)) )%>%
+  add_generator("patientESI2-d", ESI_2_patient1, from_to(18*60, 24*60, function() rexp(1, rate = 0.97/60)) )%>%
+  add_generator("patientESI3-a", ESI_3_patient1, from_to(0, 6*60, function() rexp(1, rate = 1.5/60)))%>%
+  add_generator("patientESI3-b", ESI_3_patient1, from_to(6*60, 12*60, function() rexp(1, rate = 4.0/60)) )%>%
+  add_generator("patientESI3-c", ESI_3_patient1, from_to(12*60, 18*60, function() rexp(1, rate = 5.8/60)) )%>%
+  add_generator("patientESI3-d", ESI_3_patient1, from_to(18*60, 24*60, function() rexp(1, rate = 5.6/60)) )%>%
+  add_generator("patientESI4-a", ESI_4_patient1, from_to(0, 6*60, function() rexp(1, rate = 0.71/60)))%>%
+  add_generator("patientESI4-b", ESI_4_patient1, from_to(6*60, 12*60, function() rexp(1, rate = 2.51/60)) )%>%
+  add_generator("patientESI4-c", ESI_4_patient1, from_to(12*60, 18*60, function() rexp(1, rate = 3.38/60)) )%>%
+  add_generator("patientESI4-d", ESI_4_patient1, from_to(18*60, 24*60, function() rexp(1, rate = 3.57/60)) )%>%
+  add_generator("patientESI5-a", ESI_5_patient1, from_to(0, 6*60, function() rexp(1, rate = 0.21/60)))%>%
+  add_generator("patientESI5-b", ESI_5_patient1, from_to(6*60, 12*60, function() rexp(1, rate = 0.39/60)) )%>%
+  add_generator("patientESI5-c", ESI_5_patient1, from_to(12*60, 18*60, function() rexp(1, rate = 0.49/60)) )%>%
+  add_generator("patientESI5-d", ESI_5_patient1, from_to(18*60, 24*60, function() rexp(1, rate = 0.72/60)) )%>%
+  #add_generator("patientESI0-a", ESI_0_patient1, from_to(0, 6*60, function() rexp(1, rate = 0.02)))%>%
+  #add_generator("patientESI0-b", ESI_0_patient1, from_to(6*60, 12*60, function() rexp(1, rate = 0.026)) )%>%
+  #add_generator("patientESI0-c", ESI_0_patient1, from_to(12*60, 18*60, function() rexp(1, rate = 0.029)) )%>%
+  #add_generator("patientESI0-d", ESI_0_patient1, from_to(18*60, 24*60, function() rexp(1, rate = 0.012)) )%>%
+  add_generator("patientESI1-e", ESI_1_patient2, from_to(0, 6*60, function() rexp(1, rate = 0.0039/60)))%>%
+  add_generator("patientESI1-f", ESI_1_patient2, from_to(6*60, 12*60, function() rexp(1, rate = 0.0123/60)) )%>%
+  add_generator("patientESI1-g", ESI_1_patient2, from_to(12*60, 18*60, function() rexp(1, rate = 0.0132/60)) )%>%
+  add_generator("patientESI1-h", ESI_1_patient2, from_to(18*60, 24*60, function() rexp(1, rate = 0.0113/60)) )%>%
+  add_generator("patientESI2-e", ESI_2_patient2, from_to(0, 6*60, function() rexp(1, rate = 0.25/60)))%>%
+  add_generator("patientESI2-f", ESI_2_patient2, from_to(6*60, 12*60, function() rexp(1, rate = 0.46/60)) )%>%
+  add_generator("patientESI2-g", ESI_2_patient2, from_to(12*60, 18*60, function() rexp(1, rate = 0.92/60)) )%>%
+  add_generator("patientESI2-h", ESI_2_patient2, from_to(18*60, 24*60, function() rexp(1, rate = 0.97/60)) )%>%
+  add_generator("patientESI3-e", ESI_3_patient2, from_to(0, 6*60, function() rexp(1, rate = 1.5/60)))%>%
+  add_generator("patientESI3-f", ESI_3_patient2, from_to(6*60, 12*60, function() rexp(1, rate = 4.0/60)) )%>%
+  add_generator("patientESI3-g", ESI_3_patient2, from_to(12*60, 18*60, function() rexp(1, rate = 5.8/60)) )%>%
+  add_generator("patientESI3-h", ESI_3_patient2, from_to(18*60, 24*60, function() rexp(1, rate = 5.6/60)) )%>%
+  add_generator("patientESI4-e", ESI_4_patient2, from_to(0, 6*60, function() rexp(1, rate = 0.71/60)))%>%
+  add_generator("patientESI4-f", ESI_4_patient2, from_to(6*60, 12*60, function() rexp(1, rate = 2.51/60)) )%>%
+  add_generator("patientESI4-g", ESI_4_patient2, from_to(12*60, 18*60, function() rexp(1, rate = 3.38/60)) )%>%
+  add_generator("patientESI4-h", ESI_4_patient2, from_to(18*60, 24*60, function() rexp(1, rate = 3.57/60)) )%>%
+  add_generator("patientESI5-e", ESI_5_patient2, from_to(0, 6*60, function() rexp(1, rate = 0.21/60)))%>%
+  add_generator("patientESI5-f", ESI_5_patient2, from_to(6*60, 12*60, function() rexp(1, rate = 0.39/60)) )%>%
+  add_generator("patientESI5-g", ESI_5_patient2, from_to(12*60, 18*60, function() rexp(1, rate = 0.49/60)) )%>%
+  add_generator("patientESI5-h", ESI_5_patient2, from_to(18*60, 24*60, function() rexp(1, rate = 0.72/60)) )
+  #add_generator("patientESI0-e", ESI_0_patient2, from_to(0, 6*60, function() rexp(1, rate = 0.02)))%>%
+  #add_generator("patientESI0-f", ESI_0_patient2, from_to(6*60, 12*60, function() rexp(1, rate = 0.026)) )%>%
+  #add_generator("patientESI0-g", ESI_0_patient2, from_to(12*60, 18*60, function() rexp(1, rate = 0.029)) )%>%
+  #add_generator("patientESI0-h", ESI_0_patient2, from_to(18*60, 24*60, function() rexp(1, rate = 0.012)) )%>%
+
+
+hospitalESI %>% run(until = 1440)
+
+```
+
+
+
+
+# with replications
+
+```{r}
+hospitalESIsims<-lapply(1:numReplications, function(i){
+  simmer("hospitalESIsims") %>%
+  add_resource("triage nurse",numNurse) %>%
+  add_resource("redRoom", numRedRoom) %>%
+  add_resource("orangeyellowRoom", numOrangeYellowRoom) %>%
+  add_resource("orangeRoom", numOrangeRoom) %>%
+  add_resource("yellowRoom", numYellowRoom) %>%
+  add_resource("greenRoom", numGreenRoom) %>%
+  add_resource("fasttrackRoom", numFastTrackRoom) %>%
+  #add_resource("room", numRoom)%>%
+
+  
+  
+  
+  add_generator("patientESI1-a", ESI_1_patient1, from_to(0, 6*60, function() rexp(1, rate = 0.0039/60)))%>%
+  add_generator("patientESI1-b", ESI_1_patient1, from_to(6*60, 12*60, function() rexp(1, rate = 0.0123/60)) )%>%
+  add_generator("patientESI1-c", ESI_1_patient1, from_to(12*60, 18*60, function() rexp(1, rate = 0.0132/60)) )%>%
+  add_generator("patientESI1-d", ESI_1_patient1, from_to(18*60, 24*60, function() rexp(1, rate = 0.0113/60)) )%>%
+  add_generator("patientESI2-a", ESI_2_patient1, from_to(0, 6*60, function() rexp(1, rate = 0.25/60)))%>%
+  add_generator("patientESI2-b", ESI_2_patient1, from_to(6*60, 12*60, function() rexp(1, rate = 0.46/60)) )%>%
+  add_generator("patientESI2-c", ESI_2_patient1, from_to(12*60, 18*60, function() rexp(1, rate = 0.92/60)) )%>%
+  add_generator("patientESI2-d", ESI_2_patient1, from_to(18*60, 24*60, function() rexp(1, rate = 0.97/60)) )%>%
+  add_generator("patientESI3-a", ESI_3_patient1, from_to(0, 6*60, function() rexp(1, rate = 1.5/60)))%>%
+  add_generator("patientESI3-b", ESI_3_patient1, from_to(6*60, 12*60, function() rexp(1, rate = 4.0/60)) )%>%
+  add_generator("patientESI3-c", ESI_3_patient1, from_to(12*60, 18*60, function() rexp(1, rate = 5.8/60)) )%>%
+  add_generator("patientESI3-d", ESI_3_patient1, from_to(18*60, 24*60, function() rexp(1, rate = 5.6/60)) )%>%
+  add_generator("patientESI4-a", ESI_4_patient1, from_to(0, 6*60, function() rexp(1, rate = 0.71/60)))%>%
+  add_generator("patientESI4-b", ESI_4_patient1, from_to(6*60, 12*60, function() rexp(1, rate = 2.51/60)) )%>%
+  add_generator("patientESI4-c", ESI_4_patient1, from_to(12*60, 18*60, function() rexp(1, rate = 3.38/60)) )%>%
+  add_generator("patientESI4-d", ESI_4_patient1, from_to(18*60, 24*60, function() rexp(1, rate = 3.57/60)) )%>%
+  add_generator("patientESI5-a", ESI_5_patient1, from_to(0, 6*60, function() rexp(1, rate = 0.21/60)))%>%
+  add_generator("patientESI5-b", ESI_5_patient1, from_to(6*60, 12*60, function() rexp(1, rate = 0.39/60)) )%>%
+  add_generator("patientESI5-c", ESI_5_patient1, from_to(12*60, 18*60, function() rexp(1, rate = 0.49/60)) )%>%
+  add_generator("patientESI5-d", ESI_5_patient1, from_to(18*60, 24*60, function() rexp(1, rate = 0.72/60)) )%>%
+  #add_generator("patientESI0-a", ESI_0_patient1, from_to(0, 6*60, function() rexp(1, rate = 0.02)))%>%
+  #add_generator("patientESI0-b", ESI_0_patient1, from_to(6*60, 12*60, function() rexp(1, rate = 0.026)) )%>%
+  #add_generator("patientESI0-c", ESI_0_patient1, from_to(12*60, 18*60, function() rexp(1, rate = 0.029)) )%>%
+  #add_generator("patientESI0-d", ESI_0_patient1, from_to(18*60, 24*60, function() rexp(1, rate = 0.012)) )%>%
+  add_generator("patientESI1-e", ESI_1_patient2, from_to(0, 6*60, function() rexp(1, rate = 0.0039/60)))%>%
+  add_generator("patientESI1-f", ESI_1_patient2, from_to(6*60, 12*60, function() rexp(1, rate = 0.0123/60)) )%>%
+  add_generator("patientESI1-g", ESI_1_patient2, from_to(12*60, 18*60, function() rexp(1, rate = 0.0132/60)) )%>%
+  add_generator("patientESI1-h", ESI_1_patient2, from_to(18*60, 24*60, function() rexp(1, rate = 0.0113/60)) )%>%
+  add_generator("patientESI2-e", ESI_2_patient2, from_to(0, 6*60, function() rexp(1, rate = 0.25/60)))%>%
+  add_generator("patientESI2-f", ESI_2_patient2, from_to(6*60, 12*60, function() rexp(1, rate = 0.46/60)) )%>%
+  add_generator("patientESI2-g", ESI_2_patient2, from_to(12*60, 18*60, function() rexp(1, rate = 0.92/60)) )%>%
+  add_generator("patientESI2-h", ESI_2_patient2, from_to(18*60, 24*60, function() rexp(1, rate = 0.97/60)) )%>%
+  add_generator("patientESI3-e", ESI_3_patient2, from_to(0, 6*60, function() rexp(1, rate = 1.5/60)))%>%
+  add_generator("patientESI3-f", ESI_3_patient2, from_to(6*60, 12*60, function() rexp(1, rate = 4.0/60)) )%>%
+  add_generator("patientESI3-g", ESI_3_patient2, from_to(12*60, 18*60, function() rexp(1, rate = 5.8/60)) )%>%
+  add_generator("patientESI3-h", ESI_3_patient2, from_to(18*60, 24*60, function() rexp(1, rate = 5.6/60)) )%>%
+  add_generator("patientESI4-e", ESI_4_patient2, from_to(0, 6*60, function() rexp(1, rate = 0.71/60)))%>%
+  add_generator("patientESI4-f", ESI_4_patient2, from_to(6*60, 12*60, function() rexp(1, rate = 2.51/60)) )%>%
+  add_generator("patientESI4-g", ESI_4_patient2, from_to(12*60, 18*60, function() rexp(1, rate = 3.38/60)) )%>%
+  add_generator("patientESI4-h", ESI_4_patient2, from_to(18*60, 24*60, function() rexp(1, rate = 3.57/60)) )%>%
+  add_generator("patientESI5-e", ESI_5_patient2, from_to(0, 6*60, function() rexp(1, rate = 0.21/60)))%>%
+  add_generator("patientESI5-f", ESI_5_patient2, from_to(6*60, 12*60, function() rexp(1, rate = 0.39/60)) )%>%
+  add_generator("patientESI5-g", ESI_5_patient2, from_to(12*60, 18*60, function() rexp(1, rate = 0.49/60)) )%>%
+  add_generator("patientESI5-h", ESI_5_patient2, from_to(18*60, 24*60, function() rexp(1, rate = 0.72/60)) )%>%
+  #add_generator("patientESI0-e", ESI_0_patient2, from_to(0, 6*60, function() rexp(1, rate = 0.02)))%>%
+  #add_generator("patientESI0-f", ESI_0_patient2, from_to(6*60, 12*60, function() rexp(1, rate = 0.026)) )%>%
+  #add_generator("patientESI0-g", ESI_0_patient2, from_to(12*60, 18*60, function() rexp(1, rate = 0.029)) )%>%
+  #add_generator("patientESI0-h", ESI_0_patient2, from_to(18*60, 24*60, function() rexp(1, rate = 0.012)) )%>%
+
+    run (until= 1440)
+})
+
+
+
+```
+
+
+
+```{r}
+get_mon_resources(hospitalESIsims)
+#plot(get_mon_resources(hospitalESIsims))
+```
+
+
+#resources monitor
+```{r}
+resourcesmonitor <- lapply(1:numReplications, function(i){
+  result<-hospitalESIsims[[i]]%>%
+    get_mon_resources()
+})
+
+
+```
+
+
+# arrival monitor
+```{r}
+arrivalmonitor<-lapply (1:numReplications, function(i){
+  result<-hospitalESIsims[[i]]%>%
+    get_mon_arrivals()%>%
+    dplyr::mutate(service_start_time = end_time - activity_time) %>%
+    mutate(wait_time = service_start_time - start_time)
+})
+
+```
+
+
+#patient monitor
+```{r}
+patientmonitor <- lapply(1:numReplications, function(i){
+        result <- hospitalESIsims[[i]] %>% 
+          get_mon_arrivals %>%
+          mutate(flow_time = end_time - start_time)
+})
+
+
+```
+
+```{r}
+get_mean_flow <- function(entitymonitor){
+  mean(entitymonitor$flow_time)
+}
+```
+
+```{r}
+avg_patient_flow <- sapply(patientmonitor, get_mean_flow)
+avg_patient_flowtime <- data.frame(run = 1:numReplications,
+                                 avg_flow_time = avg_patient_flow)
+avg_patient_flowtime
+```
+
+
+#get mean for waiting_time
+
+```{r}
+
+res <- get_mon_arrivals(hospitalESIsims, per_resource = TRUE) %>%
+  dplyr::select(name, resource) %>%
+  dplyr::filter(resource %in% c("triage nurse", "room"))
+
+
+arr <- get_mon_arrivals(hospitalESIsims) %>%
+  dplyr::mutate(waiting_time = end_time - (start_time + activity_time), 
+                generator = regmatches(name,regexpr("patient[[:alpha:]]", name))
+                ) %>%
+  dplyr::left_join(res) %>%
+  dplyr::group_by(generator, resource) %>%
+  summarise(avgwait = mean(waiting_time, na.rm=TRUE))
+```
+
+
+```{r}
+waiting_time <- get_mon_arrivals(hospitalESIsims) %>%
+  dplyr::mutate(waiting_time = end_time - (start_time + activity_time), 
+                generator = regmatches(name,regexpr("patient[[:alpha:]]", name))
+                ) %>%
+  dplyr::left_join(res) %>%
+  dplyr::group_by(generator, resource)
+
+waiting_time
+data.frame(waiting_time)
+```
+```
+{r}
+x<- waiting_time$waiting_time
+hist(x, freq = FALSE)
+#lines(density(waiting_time))
+mean(x)
+min(x)
+max(x)
+ggplot(waiting_time) + geom_histogram(aes(x=waiting_time)) +xlim(0, 1180)
+
+```
+
+
+
+
+
+
+```{r}
+arr2 <- get_mon_arrivals(hospitalESIsims, per_resource = TRUE) %>%
+  dplyr::mutate(waiting_time = end_time - (start_time + activity_time), 
+                generator = regmatches(name, regexpr("patient[[:alpha:]]", name))) %>%
+  dplyr::left_join(res)
+```
+
+
+
+```{r}
+waitstatistics <- arr2 %>% group_by(resource) %>%
+  dplyr::summarise(meanwait = mean(waiting_time, na.rm=TRUE),
+                   sdwait = sd(waiting_time, na.rm=TRUE))
+waitstatistics
+```
+
+
+
+
+#server utilization
+```{r}
+serverutilization <- function(resource){
+  resource <- resource %>% arrange(time)
+  lenreg <- nrow(resource)
+  timein  <- c()
+  for(i in 1:(lenreg-1)){
+    timeinstate = resource$time[i+1] - resource$time[i]
+    timein <- append(timein, timeinstate)
+  }
+  timein <- append(timein, 0)
+  resource$timein <- timein
+  serverutilization <- sum(resource$server * resource$timein) /(max(resource$time) - min(resource$time))
+  serverutilization
+}
+
+```
+
+
+#triage nurse monitor
+```{r}
+triagenursemonitor<-resourcesmonitor[[1]]%>%
+  filter(resource == "triage nurse")%>%
+  arrange(time)
+triagenurseutilization<-serverutilization(triagenursemonitor)
+
+triagenurseutilization
+```
+
+
+# Resource utilization/use graphs  
+```
+{r}
+resources <- get_mon_resources(hospitalESIsims)
+plot(resources, metric = "utilization")
+
+```
+
+# have a look at resources’ activity during the simulation
+```
+{r}
+plot(resources, metric = "usage", c("triage nurse", "redRoom", "yellowRoom", "orangeRoom", "greenRoom", "fasttrackRoom"), items = "server")
+
+```
+In the above graph, the individual lines are all separate replications. 
+
+
+
+
+# Patient waiting time distribution by ESI
+```{r}
+data(waiting_time)
+colnames(waiting_time)
+head(waiting_time)
+#sqldf('select waiting_time from waiting_time where waiting_time is not null group by name')
+
+```
+
+
+```
+{r}
+DF=sqldf('select waiting_time from waiting_time where waiting_time != "NA"')
+qplot(DF$waiting_time,data=DF, geom="histogram")
+
+#sqldf('select waiting_time from waiting_time where name like 'patientESI2%'')
+```
+
+
+# waiting time--ESI1
+```{r}
+ESI1 <- waiting_time$`waiting_time`[waiting_time$`generator` %in% c("patientE")]
+
+```
+
+
+# 3. track residents
+
+red room(10) -- capacity 3/ capacity 2
+yellow room(12) -- capacity 3
+orange room(12) -- capacity 4
+green room (10)
+fast track room (3) -- capacity 3
+
+after the resident has a room, assign a doctor "res_color+No."
+
+
+
+
+```{r}
+
+numNurse = 2 #triage nurses
+numRedRoom <- 10     
+numOrangeRoom<- 12 
+numYellowRoom <- 12
+numOrangeYellowRoom <- numOrangeRoom + numYellowRoom
+numGreenRoom <- 8
+numFastTrackRoom <- 3
+numRoom =  numFastTrackRoom + numGreenRoom #+ numOrangeRoom + numYellowRoom # + numRedRoom
+queue1 <- c("ESI1", "ESI2", "ESI3")
+queue2 <- c("ESI4", "ESI5")
+
+percentage_of_ESI4 <- 0.25
+numReplications <- 30
+set.seed(42)
+```
+
+
+```{r}
+ESI_1_patient1 <- trajectory("ESI_1_admitted ") %>%
+  seize("triage nurse", amount=1) %>% 
+  timeout(function() rexp(n = 1, rate = 0.085))%>% 
+  release("triage nurse", amount = 1)%>%
+  branch(function(){ 
+     ifelse(get_capacity(track_residents, "redRoom") < get_server_count(track_residents, "redRoom"), 
+             1,  2)}, continue = c(TRUE,TRUE),
+     trajectory("RedRoom is available")%>%
+        seize("redRoom", amount = 1)%>%
+        simmer::select(resources = c("res_red1","res_red2", "res_red3", "res_red4"), policy = "round-robin")%>%
+        set_capacity_selected(1)%>%
+        seize_selected(amount = 1)%>%
+        timeout(function() rgamma(n = 1, shape = 2.823 ,rate = 0.026 ))%>%
+        release_selected(amount = 1)%>%
+        release("redRoom",1),
+     trajectory("RedRoom is not available")%>%
+        branch(function(){ 
+          ifelse(get_capacity(track_residents, "orangeRoom") < get_server_count(track_residents, "orangeRoom"), 
+             1,  2)}, continue = c(TRUE,TRUE),
+          trajectory("OrangeRoom is available")%>%
+             seize("orangeRoom", amount = 1)%>%
+             simmer::select(resources = c("res_orange1","res_orange2", "res_orange3"), policy = "round-robin")%>%
+             set_capacity_selected(1)%>%
+             seize_selected(amount = 1)%>%
+             timeout(function() rgamma(n = 1, shape = 2.823 ,rate = 0.026 ))%>%
+             release_selected(amount = 1)%>%
+             release("orangeRoom",1),
+          trajectory("OrangeRoom is not available")%>%
+             seize("yellowRoom", amount = 1)%>%
+             simmer::select(resources = c("res_yellow1","res_yellow2", "res_yellow3","gep_yellow"), policy = "round-robin")%>%
+             set_capacity_selected(1)%>%
+             seize_selected(amount = 1)%>%
+             timeout(function() rgamma(n = 1, shape = 2.823 ,rate = 0.026 ))%>%
+             release_selected(amount = 1)%>%  
+             release("yellowRoom",1) 
+    ) )
+
+ESI_1_patient2 <- trajectory("ESI_1_discharged ") %>%
+  seize("triage nurse", amount=1) %>% 
+  timeout(function() rexp(n = 1, rate = 0.085))%>% 
+  release("triage nurse", amount = 1)%>%
+  branch(function(){ 
+     ifelse(get_capacity(track_residents, "redRoom") < get_server_count(track_residents, "redRoom"), 
+             1,  2)}, continue = c(TRUE,TRUE),
+     trajectory("RedRoom is available")%>%
+        seize("redRoom", amount = 1)%>%
+        simmer::select(resources = c("res_red1","res_red2", "res_red3", "res_red4"), policy = "round-robin")%>%
+        set_capacity_selected(1)%>%
+        seize_selected(amount = 1)%>%
+        timeout(function() rgamma(n = 1, shape = 2.823 ,rate = 0.026 ))%>%
+        release_selected(amount = 1)%>%
+        release("redRoom",1),
+     trajectory("RedRoom is not available")%>%
+        branch(function(){ 
+          ifelse(get_capacity(track_residents, "orangeRoom") < get_server_count(track_residents, "orangeRoom"), 
+             1,  2)}, continue = c(TRUE,TRUE),
+          trajectory("OrangeRoom is available")%>%
+             seize("orangeRoom", amount = 1)%>%
+             simmer::select(resources = c("res_orange1","res_orange2", "res_orange3"), policy = "round-robin")%>%
+             set_capacity_selected(1)%>%
+             seize_selected(amount = 1)%>%
+             timeout(function() rgamma(n = 1, shape = 2.823 ,rate = 0.026 ))%>%
+             release_selected(amount = 1)%>%
+             release("orangeRoom",1),
+          trajectory("OrangeRoom is not available")%>%
+             seize("yellowRoom", amount = 1)%>%
+             simmer::select(resources = c("res_yellow1","res_yellow2", "res_yellow3","gep_yellow"), policy = "round-robin")%>%
+             set_capacity_selected(1)%>%
+             seize_selected(amount = 1)%>%
+             timeout(function() rgamma(n = 1, shape = 2.823 ,rate = 0.026 ))%>%
+             release_selected(amount = 1)%>%  
+             release("yellowRoom",1) 
+    ) )
+
+```
+
+```{r}
+ESI_2_patient1 <- trajectory("ESI_2_admitted ") %>%
+  seize("triage nurse", amount=1) %>% 
+  timeout(function() rexp(n = 1, rate = 0.085))%>% 
+  release("triage nurse", amount = 1)%>%
+  branch(function(){ 
+     ifelse(get_capacity(track_residents, "redRoom") < get_server_count(track_residents, "redRoom"), 
+             1,  2)}, continue = c(TRUE,TRUE),
+     trajectory("RedRoom is available")%>%
+        seize("redRoom", amount = 1)%>%
+        simmer::select(resources = c("res_red1","res_red2", "res_red3", "res_red4"), policy = "round-robin")%>%
+        set_capacity_selected(1)%>%
+        seize_selected(amount = 1)%>%
+        timeout(function() rgamma(n = 1, shape = 2.823 ,rate = 0.026 ))%>%
+        release_selected(amount = 1)%>%
+        release("redRoom",1),
+     trajectory("RedRoom is not available")%>%
+        branch(function(){ 
+          ifelse(get_capacity(track_residents, "orangeRoom") < get_server_count(track_residents, "orangeRoom"), 
+             1,  2)}, continue = c(TRUE,TRUE),
+          trajectory("OrangeRoom is available")%>%
+             seize("orangeRoom", amount = 1)%>%
+             simmer::select(resources = c("res_orange1","res_orange2", "res_orange3","gep_yellow"), policy = "round-robin")%>%
+             set_capacity_selected(1)%>%
+             seize_selected(amount = 1)%>%
+             timeout(function() rgamma(n = 1, shape = 2.823 ,rate = 0.026 ))%>%
+             release_selected(amount = 1)%>%
+             release("orangeRoom",1),
+          trajectory("OrangeRoom is not available")%>%
+             seize("yellowRoom", amount = 1)%>%
+             simmer::select(resources = c("res_yellow1","res_yellow2", "res_yellow3","gep_yellow"), policy = "round-robin")%>%
+             set_capacity_selected(1)%>%
+             seize_selected(amount = 1)%>%
+             timeout(function() rgamma(n = 1, shape = 2.823 ,rate = 0.026 ))%>%
+             release_selected(amount = 1)%>%  
+             release("yellowRoom",1) 
+    ) )
+
+ESI_2_patient2 <- trajectory("ESI_2_discharged ") %>%
+  seize("triage nurse", amount=1) %>% 
+  timeout(function() rexp(n = 1, rate = 0.085))%>% 
+  release("triage nurse", amount = 1)%>%
+  branch(function(){ 
+     ifelse(get_capacity(track_residents, "redRoom") < get_server_count(track_residents, "redRoom"), 
+             1,  2)}, continue = c(TRUE,TRUE),
+     trajectory("RedRoom is available")%>%
+        seize("redRoom", amount = 1)%>%
+        simmer::select(resources = c("res_red1","res_red2", "res_red3", "res_red4"), policy = "round-robin")%>%
+        set_capacity_selected(1)%>%
+        seize_selected(amount = 1)%>%
+        timeout(function() rgamma(n = 1, shape = 2.823 ,rate = 0.026 ))%>%
+        release_selected(amount = 1)%>%
+        release("redRoom",1),
+     trajectory("RedRoom is not available")%>%
+        branch(function(){ 
+          ifelse(get_capacity(track_residents, "orangeRoom") < get_server_count(track_residents, "orangeRoom"), 
+             1,  2)}, continue = c(TRUE,TRUE),
+          trajectory("OrangeRoom is available")%>%
+             seize("orangeRoom", amount = 1)%>%
+             simmer::select(resources = c("res_orange1","res_orange2", "res_orange3","gep_yellow"), policy = "round-robin")%>%
+             set_capacity_selected(1)%>%
+             seize_selected(amount = 1)%>%
+             timeout(function() rgamma(n = 1, shape = 2.823 ,rate = 0.026 ))%>%
+             release_selected(amount = 1)%>%
+             release("orangeRoom",1),
+          trajectory("OrangeRoom is not available")%>%
+             seize("yellowRoom", amount = 1)%>%
+             simmer::select(resources = c("res_yellow1","res_yellow2", "res_yellow3"), policy = "round-robin")%>%
+             set_capacity_selected(1)%>%
+             seize_selected(amount = 1)%>%
+             timeout(function() rgamma(n = 1, shape = 2.823 ,rate = 0.026 ))%>%
+             release_selected(amount = 1)%>%  
+             release("yellowRoom",1) 
+    ) )
+
+
+```
+
+```{r}
+ESI_3_patient1 <- trajectory("ESI_3_admitted ") %>%
+  seize("triage nurse", amount=1) %>% 
+  timeout(function() rexp(n = 1, rate = 0.085))%>% 
+  release("triage nurse", amount = 1)%>%
+  branch(function(){ 
+      ifelse(get_capacity(track_residents, "orangeyellowRoom") < get_server_count(track_residents, "orangeyellowRoom"), 
+             1,  2)}, continue = c(TRUE,TRUE),
+     trajectory("orangeyelloeRoom is available")%>%
+        seize("orangeyellowRoom", amount = 1)%>%
+        simmer::select(resources = c("res_orange1","res_orange2", "res_orange3", "res_yellow1", "res_yellow2", "res_yellow3", "gep_yellow"), policy = "round-robin")%>%
+        set_capacity_selected(1)%>%
+        seize_selected(amount = 1)%>%
+        timeout(function() rgamma(n = 1, shape = 2.823 ,rate = 0.026 ))%>%
+        release_selected(amount = 1)%>%
+        release("orangeyellowRoom",1),
+     trajectory("orangeyellowRoom is not available")%>%
+        seize("redRoom", amount = 1)%>%
+        simmer::select(resources = c("res_red1","res_red2", "res_red3", "res_red4"), policy = "round-robin")%>%
+        set_capacity_selected(1)%>%
+        seize_selected(amount = 1)%>%
+        timeout(function() rgamma(n = 1, shape = 2.823 ,rate = 0.026 ))%>%
+        release_selected(amount = 1)%>%
+        release("redRoom",1) 
+    ) 
+
+ESI_3_patient2 <- trajectory("ESI_3_discharged ") %>%
+  seize("triage nurse", amount=1) %>% 
+  timeout(function() rexp(n = 1, rate = 0.085))%>% 
+  release("triage nurse", amount = 1)%>%
+  branch(function(){ 
+      ifelse(get_capacity(track_residents, "orangeyellowRoom") < get_server_count(track_residents, "orangeyellowRoom"), 
+             1,  2)}, continue = c(TRUE,TRUE),
+     trajectory("orangeyellowRoom is available")%>%
+        seize("orangeyellowRoom", amount = 1)%>%
+        simmer::select(resources = c("res_orange1","res_orange2", "res_orange3", "res_yellow1", "res_yellow2", "res_yellow3", "gep_yellow"), policy = "round-robin")%>%
+        set_capacity_selected(1)%>%
+        seize_selected(amount = 1)%>%
+        timeout(function() rgamma(n = 1, shape = 2.823 ,rate = 0.026 ))%>%
+        release_selected(amount = 1)%>%
+        release("orangeyellowRoom",1),
+     trajectory("orangeyellowRoom is not available")%>%
+        seize("redRoom", amount = 1)%>%
+        simmer::select(resources = c("res_red1","res_red2", "res_red3", "res_red4"), policy = "round-robin")%>%
+        set_capacity_selected(1)%>%
+        seize_selected(amount = 1)%>%
+        timeout(function() rgamma(n = 1, shape = 2.823 ,rate = 0.026 ))%>%
+        release_selected(amount = 1)%>%
+        release("redRoom",1) 
+    ) 
+
+```
+
+
+
+
+
+```{r}
+  
+ESI_4_patient1 <- trajectory("ESI_4_admitted ") %>%
+  seize("triage nurse", amount=1) %>% 
+  timeout(function() rexp(n = 1, rate = 0.085))%>% 
+  release("triage nurse", amount = 1)%>%
+  branch(
+    function() (runif(1) > percentage_of_ESI4) + 1, continue=c(F, F),
+    trajectory() %>% 
+      seize("greenRoom", amount = 1)%>%
+      simmer::select(resources = c("gep_green"), policy = "round-robin")%>%
+      set_capacity_selected(1)%>%
+      seize_selected(amount = 1)%>%
+      timeout(function() rgamma(n = 1, shape = 5.68 ,rate = 0.021))%>%
+      release_selected(amount = 1)%>%
+      release("greenRoom",1),
+    trajectory() %>% 
+      seize("fasttrackRoom", amount = 1)%>%
+      timeout(function() rgamma(n = 1, shape = 5.68 ,rate = 0.021))%>%
+      release("fasttrackRoom",1)
+  )
+
+ 
+
+ESI_4_patient2 <- trajectory("ESI_4_discharged ") %>%
+  seize("triage nurse", amount=1) %>% 
+  timeout(function() rexp(n = 1, rate = 0.085))%>% 
+  release("triage nurse", amount = 1)%>%
+  branch(
+    function() (runif(1) > percentage_of_ESI4) + 1, continue=c(F, F),
+    trajectory() %>% 
+      seize("greenRoom", amount = 1)%>%
+      simmer::select(resources = c("gep_green"), policy = "round-robin")%>%
+      set_capacity_selected(1)%>%
+      seize_selected(amount = 1)%>%
+      timeout(function() rgamma(n = 1, shape = 5.68 ,rate = 0.021))%>%
+      release_selected(amount = 1)%>%
+      release("greenRoom",1),
+    trajectory() %>% 
+      seize("fasttrackRoom", amount = 1)%>%
+      timeout(function() rgamma(n = 1, shape = 5.68 ,rate = 0.021))%>%
+      release("fasttrackRoom",1)
+  )  
+  
+```
+
+
+
+```{r}
+ESI_5_patient1 <- trajectory("ESI_5_admitted ") %>%
+  seize("triage nurse", amount=1) %>% 
+  timeout(function() rexp(n = 1, rate = 0.085))%>% 
+  release("triage nurse", amount = 1)%>%
+  seize("fasttrackRoom", amount = 1)%>%
+  timeout(function() rgamma(n = 1, shape = 5.68 ,rate = 0.021))%>%
+  release("fasttrackRoom",1)
+
+
+ESI_5_patient2 <- trajectory("ESI_5_discharged ") %>%
+  seize("triage nurse", amount=1) %>% 
+  timeout(function() rexp(n = 1, rate = 0.085))%>% 
+  release("triage nurse", amount = 1)%>%
+  seize("fasttrackRoom", amount = 1)%>%
+  timeout(function() rgamma(n = 1, shape = 2.82 ,rate = 0.02 ))%>%
+  release("fasttrackRoom",1)
+
+```
+
+NOTE:  CHANGE RESOURCES FOR YELLOW AND GREEN
+YELLOW INCLUDES A GEP RESOURCE (attending without resident)
+GREEN ONLY HAS GEP, no residents
+```{r}
+track_residents <- simmer("track_residents")  %>%
+  
+  add_resource("res_red1",capacity = 3)%>%
+  add_resource("res_red2", capacity = 3) %>%
+  add_resource("res_red3",capacity = 2)%>%
+  add_resource("res_red4", capacity = 2) %>%
+  #add_resource("res_red5",capacity = 2)%>%
+  add_resource("res_orange1", capacity = 4) %>%
+  add_resource("res_orange2",capacity = 4)%>%
+  add_resource("res_orange3", capacity = 4) %>%
+  add_resource("res_yellow1", capacity = 3) %>%
+  add_resource("res_yellow2",capacity = 3)%>%
+  add_resource("res_yellow3", capacity = 3) %>%
+
+  add_resource("gep_yellow", capacity = 3) %>%
+  #add_resource("res_green1",capacity = 4)%>%
+  #add_resource("res_green2", capacity = 4) %>%
+  add_resource("gep_green", capacity = 10) %>%
+
+  add_resource("triage nurse",numNurse) %>%
+  add_resource("redRoom", numRedRoom) %>%
+  add_resource("orangeyellowRoom", numOrangeYellowRoom) %>%
+  add_resource("orangeRoom", numOrangeRoom) %>%
+  add_resource("yellowRoom", numYellowRoom) %>%
+  add_resource("greenRoom", numGreenRoom) %>%
+  add_resource("fasttrackRoom", numFastTrackRoom) %>%
+  
+  add_generator("patientESI1-a", ESI_1_patient1, from_to(0, 6*60, function() rexp(1, rate = 0.0039/60)))%>%
+  add_generator("patientESI1-b", ESI_1_patient1, from_to(6*60, 12*60, function() rexp(1, rate = 0.0123/60)) )%>%
+  add_generator("patientESI1-c", ESI_1_patient1, from_to(12*60, 18*60, function() rexp(1, rate = 0.0132/60)) )%>%
+  add_generator("patientESI1-d", ESI_1_patient1, from_to(18*60, 24*60, function() rexp(1, rate = 0.0113/60)) )%>%
+  add_generator("patientESI2-a", ESI_2_patient1, from_to(0, 6*60, function() rexp(1, rate = 0.25/60)))%>%
+  add_generator("patientESI2-b", ESI_2_patient1, from_to(6*60, 12*60, function() rexp(1, rate = 0.46/60)) )%>%
+  add_generator("patientESI2-c", ESI_2_patient1, from_to(12*60, 18*60, function() rexp(1, rate = 0.92/60)) )%>%
+  add_generator("patientESI2-d", ESI_2_patient1, from_to(18*60, 24*60, function() rexp(1, rate = 0.97/60)) )%>%
+  add_generator("patientESI3-a", ESI_3_patient1, from_to(0, 6*60, function() rexp(1, rate = 1.5/60)))%>%
+  add_generator("patientESI3-b", ESI_3_patient1, from_to(6*60, 12*60, function() rexp(1, rate = 4.0/60)) )%>%
+  add_generator("patientESI3-c", ESI_3_patient1, from_to(12*60, 18*60, function() rexp(1, rate = 5.8/60)) )%>%
+  add_generator("patientESI3-d", ESI_3_patient1, from_to(18*60, 24*60, function() rexp(1, rate = 5.6/60)) )%>%
+  add_generator("patientESI4-a", ESI_4_patient1, from_to(0, 6*60, function() rexp(1, rate = 0.71/60)))%>%
+  add_generator("patientESI4-b", ESI_4_patient1, from_to(6*60, 12*60, function() rexp(1, rate = 2.51/60)) )%>%
+  add_generator("patientESI4-c", ESI_4_patient1, from_to(12*60, 18*60, function() rexp(1, rate = 3.38/60)) )%>%
+  add_generator("patientESI4-d", ESI_4_patient1, from_to(18*60, 24*60, function() rexp(1, rate = 3.57/60)) )%>%
+  add_generator("patientESI5-a", ESI_5_patient1, from_to(0, 6*60, function() rexp(1, rate = 0.21/60)))%>%
+  add_generator("patientESI5-b", ESI_5_patient1, from_to(6*60, 12*60, function() rexp(1, rate = 0.39/60)) )%>%
+  add_generator("patientESI5-c", ESI_5_patient1, from_to(12*60, 18*60, function() rexp(1, rate = 0.49/60)) )%>%
+  add_generator("patientESI5-d", ESI_5_patient1, from_to(18*60, 24*60, function() rexp(1, rate = 0.72/60)) )%>%
+ 
+  add_generator("patientESI1-e", ESI_1_patient2, from_to(0, 6*60, function() rexp(1, rate = 0.0039/60)))%>%
+  add_generator("patientESI1-f", ESI_1_patient2, from_to(6*60, 12*60, function() rexp(1, rate = 0.0123/60)) )%>%
+  add_generator("patientESI1-g", ESI_1_patient2, from_to(12*60, 18*60, function() rexp(1, rate = 0.0132/60)) )%>%
+  add_generator("patientESI1-h", ESI_1_patient2, from_to(18*60, 24*60, function() rexp(1, rate = 0.0113/60)) )%>%
+  add_generator("patientESI2-e", ESI_2_patient2, from_to(0, 6*60, function() rexp(1, rate = 0.25/60)))%>%
+  add_generator("patientESI2-f", ESI_2_patient2, from_to(6*60, 12*60, function() rexp(1, rate = 0.46/60)) )%>%
+  add_generator("patientESI2-g", ESI_2_patient2, from_to(12*60, 18*60, function() rexp(1, rate = 0.92/60)) )%>%
+  add_generator("patientESI2-h", ESI_2_patient2, from_to(18*60, 24*60, function() rexp(1, rate = 0.97/60)) )%>%
+  add_generator("patientESI3-e", ESI_3_patient2, from_to(0, 6*60, function() rexp(1, rate = 1.5/60)))%>%
+  add_generator("patientESI3-f", ESI_3_patient2, from_to(6*60, 12*60, function() rexp(1, rate = 4.0/60)) )%>%
+  add_generator("patientESI3-g", ESI_3_patient2, from_to(12*60, 18*60, function() rexp(1, rate = 5.8/60)) )%>%
+  add_generator("patientESI3-h", ESI_3_patient2, from_to(18*60, 24*60, function() rexp(1, rate = 5.6/60)) )%>%
+  add_generator("patientESI4-e", ESI_4_patient2, from_to(0, 6*60, function() rexp(1, rate = 0.71/60)))%>%
+  add_generator("patientESI4-f", ESI_4_patient2, from_to(6*60, 12*60, function() rexp(1, rate = 2.51/60)) )%>%
+  add_generator("patientESI4-g", ESI_4_patient2, from_to(12*60, 18*60, function() rexp(1, rate = 3.38/60)) )%>%
+  add_generator("patientESI4-h", ESI_4_patient2, from_to(18*60, 24*60, function() rexp(1, rate = 3.57/60)) )%>%
+  add_generator("patientESI5-e", ESI_5_patient2, from_to(0, 6*60, function() rexp(1, rate = 0.21/60)))%>%
+  add_generator("patientESI5-f", ESI_5_patient2, from_to(6*60, 12*60, function() rexp(1, rate = 0.39/60)) )%>%
+  add_generator("patientESI5-g", ESI_5_patient2, from_to(12*60, 18*60, function() rexp(1, rate = 0.49/60)) )%>%
+  add_generator("patientESI5-h", ESI_5_patient2, from_to(18*60, 24*60, function() rexp(1, rate = 0.72/60)) )
+  
+  track_residents%>%run(until = 1440)
+
+
+```
+
+
+```{r}
+get_mon_resources(track_residents)
+
+```
+
+
+#get avg demand
+demand / 1440 
+average number of patients * average length of stay
+avg(patients) -- arrival rates
+avg(stay length <- time in service) -- gamma distribtuion from the simulation( use parameters in trajectory)
+
+shape*scale
+shape*scale^2
+(scale = 1/ rate)
+
+
+```
+{r}
+
+0.71 + 0.
+
+
+```
+
+
+
+
+```
+{r}
+
+serverutilization <- function(resource){
+
+  resource <- resource %>% arrange(time)
+  lenreg <- nrow(resource)
+  timein  <- c()
+  for(i in 1:(lenreg-1)){
+    timeinstate = resource$time[i+1] - resource$time[i]
+    timein <- append(timein, timeinstate)
+  }
+  timein <- append(timein, 0)
+  resource$timein <- timein
+  serverutilization <- sum(resource$server * resource$timein) /(max(resource$time) - min(resource$time))
+  serverutilization
+}
+
+res_green1_monitor<-get_mon_resources(res_green)%>%
+  filter(resource == "res_green1")%>%
+  arrange(time)
+res_green1_utilization<-serverutilization(res_green1_monitor)
+
+res_green1_utilization
+
+```
+
+
+---------------------------------------------------------------------------------------------------------------
+---------------------------------------------------------------------------------------------------------------
+
+
+2 simulation cases:
+#To do -> case1:patients assined to rooms, doctors assigned to patients--spread the workload
+
+case2:doctors assigned to rooms, and patients assigned to rooms--done!
+
+e.g.
+ESI 3 -- orange/yellow for case2
+yellow rooms --12
+orange rooms --12
+
+
+For case1:each group(yellow or orange): 3 nurses and 2 residents, so every nurse get 4 rooms. In current  state, residents are not assigned to rooms.
+
+nurses are assigned to rooms, when patients arrrived, they are assigned to room that has the minimum patients.The doctors will be aasigned to patients. 
+
+# how do we assign the doctors--minimum patients or maximum patient?
+
+
+#simplest case:
+4 nurses,2 residents,8 rooms --green , ESI4
+
+```{r}
+#patients assigned to rooms, then doctors assigned to patients
+
+#for green rooms:4 nurses, 2 residents, 8 rooms
+numNurse <- 2
+numNurse_in_GreenRoom <- 4 #not triage nurses, but nurses in green rooms
+numGreenRoom <- 8
+numFastTrackRoom <- 3
+percentage_of_ESI4 <- 0.25
+numReplications_sim2 <- 30
+set.seed(52)
+
+library(simmer)
+```
+
+divide green rooms into 4 groups(because of 4 nurses)
+
+
+```{r}
+sim2_ESI_4_patient1 <- trajectory("ESI_4_admitted ") %>%
+  seize("triage nurse", amount=1) %>% 
+  timeout(function() rexp(n = 1, rate = 0.085))%>% 
+  release("triage nurse", amount = 1)%>%
+  branch(
+    function() (runif(1) > percentage_of_ESI4) + 1, continue=c(F, F),
+    trajectory() %>% 
+      #patient goes to the room that has minimum patients
+      simmer::select(resources = c("greenRoom"), policy = "shortest-queue")%>%
+      set_capacity_selected(1)%>%
+      seize_selected(amount = 1)%>%
+      timeout(function() rgamma(n = 1, shape = 5.68 ,rate = 0.021))%>%
+      release_selected(amount = 1)%>%
+      #seize a doctor
+      simmer::select(resources = c("doctor1_green,doctor2_green"), policy = "shortest-queue")%>%
+      set_capacity_selected(1)%>%
+      seize_selected(amount = 1)%>%
+      timeout(function() rgamma(n = 1, shape = 5.68 ,rate = 0.021))%>%
+      release_selected(amount = 1)%>%
+      release("greenRoom",1),
+    trajectory() %>% 
+      seize("fasttrackRoom", amount = 1)%>%
+      timeout(function() rgamma(n = 1, shape = 5.68 ,rate = 0.021))%>%
+      release("fasttrackRoom",1)
+  )
+
+ 
+
+sim2_ESI_4_patient2 <- trajectory("ESI_4_discharged ") %>%
+  seize("triage nurse", amount=1) %>% 
+  timeout(function() rexp(n = 1, rate = 0.085))%>% 
+  release("triage nurse", amount = 1)%>%
+  branch(
+    function() (runif(1) > percentage_of_ESI4) + 1, continue=c(F, F),
+    trajectory() %>% 
+      seize("greenRoom", amount = 1)%>%
+      simmer::select(resources = c("greenRoom"), policy = "shortest-queue")%>%
+      set_capacity_selected(1)%>%
+      seize_selected(amount = 1)%>%
+      timeout(function() rgamma(n = 1, shape = 5.68 ,rate = 0.021))%>%
+      release_selected(amount = 1)%>%
+      simmer::select(resources = c("doctor1_green,doctor2_green"), policy = "shortest-queue")%>%
+      set_capacity_selected(1)%>%
+      seize_selected(amount = 1)%>%
+      timeout(function() rgamma(n = 1, shape = 5.68 ,rate = 0.021))%>%
+      release_selected(amount = 1)%>%
+      release("greenRoom",1),
+    trajectory() %>% 
+      seize("fasttrackRoom", amount = 1)%>%
+      timeout(function() rgamma(n = 1, shape = 5.68 ,rate = 0.021))%>%
+      release("fasttrackRoom",1)
+  )  
+  
+
+```
+
+
+
+```{r}
+sim2_hospitalESI <- simmer("hospitalESI in Case1")  %>%
+  
+  
+  add_resource("doctor1_green",capacity = 5)%>%
+  add_resource("doctor2_green", capacity = 3) %>%
+  #add_resource("gep_green", capacity = 2) %>%
+
+  add_resource("triage nurse",numNurse) %>%
+  add_resource("green room nurse",numNurse_in_GreenRoom) %>%
+  #add_resource("redRoom", numRedRoom) %>%
+  #add_resource("orangeyellowRoom", numOrangeYellowRoom) %>%
+  #add_resource("orangeRoom", numOrangeRoom) %>%
+  #add_resource("yellowRoom", numYellowRoom) %>%
+  add_resource("greenRoom", numGreenRoom) %>%
+  add_resource("fasttrackRoom", numFastTrackRoom) %>%
+
+  add_generator("patientESI4-i", sim2_ESI_4_patient1, from_to(0, 6*60, function() rexp(1, rate = 0.71/60)))%>%
+  add_generator("patientESI4-j", sim2_ESI_4_patient1, from_to(6*60, 12*60, function() rexp(1, rate = 2.51/60)) )%>%
+  add_generator("patientESI4-k", sim2_ESI_4_patient1, from_to(12*60, 18*60, function() rexp(1, rate = 3.38/60)) )%>%
+  add_generator("patientESI4-l", sim2_ESI_4_patient1, from_to(18*60, 24*60, function() rexp(1, rate = 3.57/60)) )%>%
+  
+  
+  add_generator("patientESI4-m", sim2_ESI_4_patient2, from_to(0, 6*60, function() rexp(1, rate = 0.71/60)))%>%
+  add_generator("patientESI4-n", sim2_ESI_4_patient2, from_to(6*60, 12*60, function() rexp(1, rate = 2.51/60)) )%>%
+  add_generator("patientESI4-o", sim2_ESI_4_patient2, from_to(12*60, 18*60, function() rexp(1, rate = 3.38/60)) )%>%
+  add_generator("patientESI4-p", sim2_ESI_4_patient2, from_to(18*60, 24*60, function() rexp(1, rate = 3.57/60)) )
+ 
+  sim2_hospitalESI%>%run(until = 1440)
+
+
+  
+  
+```
+
+
+```{r}
+get_mon_resources(sim2_hospitalESI,per_resource = TRUE)%>%
+   dplyr::select(name, resource) %>%
+   dplyr::filter(resource %in% c("doctor1_green","doctor2_green"))
+
+``` 
+
+
+```{r}
+
+
+````
+
+
